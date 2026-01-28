@@ -3,6 +3,7 @@ Fine-tune Qwen3-8B on Danish instruction data.
 """
 
 import os
+import argparse
 # Limit multiprocessing before importing libraries that auto-detect CPU count
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 os.environ["UNSLOTH_NUM_PROC"] = "4"
@@ -13,24 +14,35 @@ from trl import SFTTrainer
 from transformers import TrainingArguments
 import config
 
-def load_model():
-    """Load Qwen3 with 4-bit quantization and apply LoRA."""
-    model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=config.MODEL_NAME,
-        max_seq_length=config.MAX_SEQ_LENGTH,
-        load_in_4bit=True,
-        dtype=None,  # auto-detect
-    )
+LORA_ADAPTER_PATH = os.path.join(config.OUTPUT_DIR, "lora_adapter")
 
-    model = FastLanguageModel.get_peft_model(
-        model,
-        r=config.LORA_R,
-        lora_alpha=config.LORA_ALPHA,
-        lora_dropout=config.LORA_DROPOUT,
-        target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
-                       "gate_proj", "up_proj", "down_proj"],
-        use_gradient_checkpointing="unsloth",
-    )
+def load_model(resume=False):
+    """Load Qwen3 with 4-bit quantization and apply LoRA."""
+    if resume and os.path.exists(LORA_ADAPTER_PATH):
+        print(f"Resuming from saved adapter: {LORA_ADAPTER_PATH}")
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=LORA_ADAPTER_PATH,
+            max_seq_length=config.MAX_SEQ_LENGTH,
+            load_in_4bit=True,
+            dtype=None,
+        )
+    else:
+        model, tokenizer = FastLanguageModel.from_pretrained(
+            model_name=config.MODEL_NAME,
+            max_seq_length=config.MAX_SEQ_LENGTH,
+            load_in_4bit=True,
+            dtype=None,  # auto-detect
+        )
+
+        model = FastLanguageModel.get_peft_model(
+            model,
+            r=config.LORA_R,
+            lora_alpha=config.LORA_ALPHA,
+            lora_dropout=config.LORA_DROPOUT,
+            target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
+                           "gate_proj", "up_proj", "down_proj"],
+            use_gradient_checkpointing="unsloth",
+        )
 
     return model, tokenizer
 
@@ -44,8 +56,12 @@ def format_example(example, tokenizer):
     return {"text": tokenizer.apply_chat_template(messages, tokenize=False)}
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--resume", action="store_true", help="Resume from saved LoRA adapter")
+    args = parser.parse_args()
+
     print("Loading model...")
-    model, tokenizer = load_model()
+    model, tokenizer = load_model(resume=args.resume)
 
     print("Loading dataset...")
     dataset = load_dataset(config.DATASET_NAME, split="train")
