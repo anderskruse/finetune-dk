@@ -76,6 +76,7 @@ def main():
         dataset_text_field="text",
         max_seq_length=config.MAX_SEQ_LENGTH,
         args=training_args,
+        dataset_num_proc=4,
     )
 
     print("Starting training...")
