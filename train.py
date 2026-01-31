@@ -97,7 +97,6 @@ def main():
         max_seq_length=config.MAX_SEQ_LENGTH,
         dataset_num_proc=4,
         args=training_args,
-        dataset_num_proc=4,
     )
 
     print("Starting training...")
