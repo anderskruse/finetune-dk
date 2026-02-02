@@ -11,8 +11,11 @@ uv pip install -e .  # or: pip install -e .
 # Login to Hugging Face (need Write token from https://huggingface.co/settings/tokens)
 hf auth login
 
-# Train the model
+# Train (defaults to Mistral-Nemo-12B + skolegpt-instruct)
 python train.py
+
+# Or specify model and dataset
+python train.py --model unsloth/Mistral-Nemo-Instruct-2407 --dataset kobprof/skolegpt-instruct
 
 # Evaluate
 python evaluate.py --model ./outputs/merged_model
@@ -30,13 +33,20 @@ python upload_model.py --repo yourusername/Mistral-Nemo-12B-Danish-Instruct
 
 ## Training
 
-Uses LoRA fine-tuning with Unsloth.
+Uses LoRA fine-tuning with Unsloth in 8-bit quantization.
+
+Default model: [Mistral-Nemo-Instruct-2407](https://huggingface.co/mistralai/Mistral-Nemo-Instruct-2407) (12B params)
 
 Default config:
 - LoRA r=16, alpha=16
 - Learning rate: 5e-5
 - Batch size: 2 (with 8x gradient accumulation)
 - Epochs: 3
+
+You can override model and dataset via CLI args:
+```bash
+python train.py --model unsloth/some-other-model --dataset your/dataset
+```
 
 ## Dataset
 
