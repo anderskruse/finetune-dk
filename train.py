@@ -15,11 +15,12 @@ from transformers import TrainingArguments
 import config
 
 
-def load_model(model_name):
+def load_model(model_name, lora_r=config.LORA_R, lora_alpha=config.LORA_ALPHA,
+               max_seq_length=config.MAX_SEQ_LENGTH):
     """Load model with 8-bit quantization and apply LoRA."""
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
-        max_seq_length=config.MAX_SEQ_LENGTH,
+        max_seq_length=max_seq_length,
         load_in_4bit=False,
         load_in_8bit=True,
         dtype=None,  # auto-detect
@@ -27,8 +28,8 @@ def load_model(model_name):
 
     model = FastLanguageModel.get_peft_model(
         model,
-        r=config.LORA_R,
-        lora_alpha=config.LORA_ALPHA,
+        r=lora_r,
+        lora_alpha=lora_alpha,
         lora_dropout=config.LORA_DROPOUT,
         target_modules=["q_proj", "k_proj", "v_proj", "o_proj",
                        "gate_proj", "up_proj", "down_proj"],
@@ -50,11 +51,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", default=config.MODEL_NAME, help="HF model name (default: %(default)s)")
     parser.add_argument("--dataset", default=config.DATASET_NAME, help="HF dataset name (default: %(default)s)")
-    parser.add_argument("--resume", action="store_true", help="Resume from saved LoRA adapter")
+    parser.add_argument("--epochs", type=int, default=config.NUM_EPOCHS, help="Number of training epochs (default: %(default)s)")
+    parser.add_argument("--lr", type=float, default=config.LEARNING_RATE, help="Learning rate (default: %(default)s)")
+    parser.add_argument("--batch-size", type=int, default=config.BATCH_SIZE, help="Per-device batch size (default: %(default)s)")
+    parser.add_argument("--grad-accum", type=int, default=config.GRADIENT_ACCUMULATION, help="Gradient accumulation steps (default: %(default)s)")
+    parser.add_argument("--lora-r", type=int, default=config.LORA_R, help="LoRA rank (default: %(default)s)")
+    parser.add_argument("--lora-alpha", type=int, default=config.LORA_ALPHA, help="LoRA alpha (default: %(default)s)")
+    parser.add_argument("--max-seq-length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length (default: %(default)s)")
+    parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
     args = parser.parse_args()
 
     print(f"Loading model: {args.model}")
-    model, tokenizer = load_model(args.model)
+    model, tokenizer = load_model(args.model, lora_r=args.lora_r, lora_alpha=args.lora_alpha,
+                                  max_seq_length=args.max_seq_length)
 
     print(f"Loading dataset: {args.dataset}")
     dataset = load_dataset(args.dataset, split="train")
@@ -68,10 +77,10 @@ def main():
     # Training args
     training_args = TrainingArguments(
         output_dir=config.OUTPUT_DIR,
-        per_device_train_batch_size=config.BATCH_SIZE,
-        gradient_accumulation_steps=config.GRADIENT_ACCUMULATION,
-        learning_rate=config.LEARNING_RATE,
-        num_train_epochs=config.NUM_EPOCHS,
+        per_device_train_batch_size=args.batch_size,
+        gradient_accumulation_steps=args.grad_accum,
+        learning_rate=args.lr,
+        num_train_epochs=args.epochs,
         warmup_steps=config.WARMUP_STEPS,
         save_steps=config.SAVE_STEPS,
         logging_steps=config.LOGGING_STEPS,
@@ -87,7 +96,7 @@ def main():
         tokenizer=tokenizer,
         train_dataset=dataset,
         dataset_text_field="text",
-        max_seq_length=config.MAX_SEQ_LENGTH,
+        max_seq_length=args.max_seq_length,
         dataset_num_proc=4,
         args=training_args,
     )
