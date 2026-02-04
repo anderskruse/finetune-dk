@@ -1,5 +1,5 @@
 """
-Upload fine-tuned model to Hugging Face Hub.
+Upload fine-tuned Mistral-Nemo model to Hugging Face Hub.
 """
 
 import argparse
@@ -10,25 +10,25 @@ license: apache-2.0
 language:
 - da
 - en
-base_model: Qwen/Qwen3-8B
+base_model: mistralai/Mistral-Nemo-Instruct-2407
 tags:
 - danish
-- qwen3
+- mistral-nemo
 - instruction-tuning
 - lora
 ---
 
-# Qwen3-8B Danish Instruct
+# Mistral-Nemo-12B Danish Instruct
 
-Danish instruction-tuned version of Qwen3-8B, fine-tuned on the skolegpt-instruct dataset.
+Danish instruction-tuned version of Mistral-Nemo-12B, fine-tuned on the skolegpt-instruct dataset.
 
 ## Usage
 
 ```python
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-model = AutoModelForCausalLM.from_pretrained("YOUR_USERNAME/Qwen3-8B-Danish-Instruct")
-tokenizer = AutoTokenizer.from_pretrained("YOUR_USERNAME/Qwen3-8B-Danish-Instruct")
+model = AutoModelForCausalLM.from_pretrained("YOUR_USERNAME/Mistral-Nemo-12B-Danish-Instruct")
+tokenizer = AutoTokenizer.from_pretrained("YOUR_USERNAME/Mistral-Nemo-12B-Danish-Instruct")
 
 messages = [
     {"role": "system", "content": "Du er en hjælpsom assistent."},
@@ -43,14 +43,14 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 
 ## Training
 
-- **Base model:** Qwen/Qwen3-8B
+- **Base model:** mistralai/Mistral-Nemo-Instruct-2407
 - **Dataset:** kobprof/skolegpt-instruct
 - **Method:** LoRA fine-tuning with Unsloth
 - **Hardware:** RTX 4090
 
 ## Acknowledgments
 
-- Qwen team for the base model
+- Mistral AI for the base model
 - KobProf for the skolegpt-instruct dataset
 """
 
@@ -73,7 +73,7 @@ def main():
     api.upload_folder(
         folder_path=args.model_path,
         repo_id=args.repo,
-        commit_message="Upload fine-tuned Qwen3-8B Danish model"
+        commit_message="Upload fine-tuned Mistral-Nemo-12B Danish model"
     )
 
     # Upload model card

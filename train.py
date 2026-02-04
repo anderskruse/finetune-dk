@@ -1,5 +1,5 @@
 """
-Fine-tune Qwen3-8B on Danish instruction data.
+Fine-tune a language model on instruction data using LoRA + Unsloth.
 """
 
 import os
@@ -15,12 +15,13 @@ from transformers import TrainingArguments
 import config
 
 
-def load_model():
-    """Load Qwen3 with 4-bit quantization and apply LoRA."""
+def load_model(model_name):
+    """Load model with 8-bit quantization and apply LoRA."""
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=config.MODEL_NAME,
+        model_name=model_name,
         max_seq_length=config.MAX_SEQ_LENGTH,
-        load_in_4bit=True,
+        load_in_4bit=False,
+        load_in_8bit=True,
         dtype=None,  # auto-detect
     )
 
@@ -37,7 +38,7 @@ def load_model():
     return model, tokenizer
 
 def format_example(example, tokenizer):
-    """Format a single example for Qwen3 chat template."""
+    """Format a single example using the model's chat template."""
     messages = [
         {"role": "system", "content": config.SYSTEM_PROMPT},
         {"role": "user", "content": example["question"]},
@@ -47,14 +48,16 @@ def format_example(example, tokenizer):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model", default=config.MODEL_NAME, help="HF model name (default: %(default)s)")
+    parser.add_argument("--dataset", default=config.DATASET_NAME, help="HF dataset name (default: %(default)s)")
     parser.add_argument("--resume", action="store_true", help="Resume from saved LoRA adapter")
     args = parser.parse_args()
 
-    print("Loading model...")
-    model, tokenizer = load_model()
+    print(f"Loading model: {args.model}")
+    model, tokenizer = load_model(args.model)
 
-    print("Loading dataset...")
-    dataset = load_dataset(config.DATASET_NAME, split="train")
+    print(f"Loading dataset: {args.dataset}")
+    dataset = load_dataset(args.dataset, split="train")
 
     print(f"Formatting {len(dataset)} examples...")
     dataset = dataset.map(

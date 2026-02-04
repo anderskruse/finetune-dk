@@ -1,5 +1,5 @@
 """
-Evaluate the fine-tuned model on Danish prompts.
+Evaluate the fine-tuned Mistral-Nemo model on Danish prompts.
 """
 
 import argparse
@@ -20,7 +20,8 @@ def load_model(model_path):
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_path,
         max_seq_length=config.MAX_SEQ_LENGTH,
-        load_in_4bit=True,
+        load_in_4bit=False,
+        load_in_8bit=True,
     )
     FastLanguageModel.for_inference(model)
     return model, tokenizer
@@ -45,8 +46,8 @@ def generate(model, tokenizer, prompt):
 
     response = tokenizer.decode(outputs[0], skip_special_tokens=True)
     # Extract just the assistant response
-    if "<|assistant|>" in response:
-        response = response.split("<|assistant|>")[-1].strip()
+    if "[/INST]" in response:
+        response = response.split("[/INST]")[-1].strip()
     return response
 
 def main():
