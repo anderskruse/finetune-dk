@@ -114,8 +114,8 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 source ~/.bashrc
 
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/YOUR_REPO_NAME
-cd YOUR_REPO_NAME
+git clone https://github.com/anderskruse/finetune-dk.git
+cd finetune-dk
 uv pip install --system -e .
 
 # Login to HF
@@ -129,13 +129,13 @@ python train.py --load-in-16bit --no-thinking && runpodctl stop pod $RUNPOD_POD_
 ### 3. Upload (after pod stops)
 ```bash
 # Start the pod again from dashboard, then:
-cd /workspace/YOUR_REPO_NAME
+cd /workspace/finetune-dk
 python upload_model.py --repo YOUR_USERNAME/My-Danish-Model
 
 # Terminate pod after upload is done
 ```
 
-Weights are saved to `/workspace/YOUR_REPO_NAME/outputs/merged_model/`.
+Weights are saved to `/workspace/finetune-dk/outputs/merged_model/`.
 
 ## Serverless Endpoint
 
