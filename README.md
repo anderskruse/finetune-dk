@@ -34,9 +34,9 @@ Different model families have different requirements:
 
 | Model | Command |
 |---|---|
-| **Qwen3.5-9B** (default) | `python train.py --load-in-16bit --no-thinking` |
-| **Qwen3.5-27B** | `python train.py --model unsloth/Qwen3.5-27B --load-in-16bit --no-thinking` |
-| **Qwen3-14B** | `python train.py --model unsloth/Qwen3-14B --load-in-16bit --no-thinking` |
+| **Qwen3.5-9B** (default) | `python train.py --no-thinking` |
+| **Qwen3.5-27B** *(40GB+ GPU)* | `python train.py --model unsloth/Qwen3.5-27B --load-in-16bit --no-thinking` |
+| **Qwen3-14B** | `python train.py --model unsloth/Qwen3-14B --no-thinking` |
 | **Mistral-Nemo-12B** | `python train.py --model unsloth/Mistral-Nemo-Instruct-2407` |
 | **Llama-3.1-8B** | `python train.py --model unsloth/Meta-Llama-3.1-8B-Instruct` |
 
