@@ -14,6 +14,8 @@ dependencies = [
     "torch>=2.2.0",
     "torchvision",
     "openai>=1.0.0",
+    "causal-conv1d",
+    "flash-linear-attention",
 ]
 
 [tool.setuptools]
