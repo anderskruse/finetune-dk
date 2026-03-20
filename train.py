@@ -16,13 +16,14 @@ import config
 
 
 def load_model(model_name, lora_r=config.LORA_R, lora_alpha=config.LORA_ALPHA,
-               max_seq_length=config.MAX_SEQ_LENGTH):
-    """Load model with 8-bit quantization and apply LoRA."""
+               max_seq_length=config.MAX_SEQ_LENGTH, load_in_16bit=False):
+    """Load model and apply LoRA."""
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=model_name,
         max_seq_length=max_seq_length,
         load_in_4bit=False,
-        load_in_8bit=True,
+        load_in_8bit=not load_in_16bit,
+        load_in_16bit=load_in_16bit,
         dtype=None,  # auto-detect
     )
 
@@ -38,14 +39,17 @@ def load_model(model_name, lora_r=config.LORA_R, lora_alpha=config.LORA_ALPHA,
 
     return model, tokenizer
 
-def format_example(example, tokenizer):
+def format_example(example, tokenizer, no_thinking=False):
     """Format a single example using the model's chat template."""
     messages = [
         {"role": "system", "content": config.SYSTEM_PROMPT},
         {"role": "user", "content": example["question"]},
         {"role": "assistant", "content": example["response"]}
     ]
-    return {"text": tokenizer.apply_chat_template(messages, tokenize=False)}
+    kwargs = {}
+    if no_thinking:
+        kwargs["enable_thinking"] = False
+    return {"text": tokenizer.apply_chat_template(messages, tokenize=False, **kwargs)}
 
 def main():
     parser = argparse.ArgumentParser()
@@ -58,19 +62,22 @@ def main():
     parser.add_argument("--lora-r", type=int, default=config.LORA_R, help="LoRA rank (default: %(default)s)")
     parser.add_argument("--lora-alpha", type=int, default=config.LORA_ALPHA, help="LoRA alpha (default: %(default)s)")
     parser.add_argument("--max-seq-length", type=int, default=config.MAX_SEQ_LENGTH, help="Max sequence length (default: %(default)s)")
+    parser.add_argument("--load-in-16bit", action="store_true", help="Load model in 16-bit (recommended for Qwen3.5)")
+    parser.add_argument("--no-thinking", action="store_true", help="Disable thinking mode in chat template (for Qwen3+)")
     parser.add_argument("--resume", action="store_true", help="Resume from latest checkpoint")
     args = parser.parse_args()
 
     print(f"Loading model: {args.model}")
     model, tokenizer = load_model(args.model, lora_r=args.lora_r, lora_alpha=args.lora_alpha,
-                                  max_seq_length=args.max_seq_length)
+                                  max_seq_length=args.max_seq_length,
+                                  load_in_16bit=args.load_in_16bit)
 
     print(f"Loading dataset: {args.dataset}")
     dataset = load_dataset(args.dataset, split="train")
 
     print(f"Formatting {len(dataset)} examples...")
     dataset = dataset.map(
-        lambda x: format_example(x, tokenizer),
+        lambda x: format_example(x, tokenizer, no_thinking=args.no_thinking),
         remove_columns=dataset.column_names
     )
 

@@ -1,7 +1,7 @@
-# Training configuration for Mistral-Nemo-12B Danish fine-tuning
+# Training configuration for Danish fine-tuning
 
 # Model
-MODEL_NAME = "unsloth/Mistral-Nemo-Instruct-2407"
+MODEL_NAME = "unsloth/Qwen3.5-9B"
 OUTPUT_DIR = "./outputs"
 
 # Dataset

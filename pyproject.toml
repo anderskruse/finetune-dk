@@ -13,4 +13,5 @@ dependencies = [
     "huggingface_hub>=0.21.0",
     "torch>=2.2.0",
     "torchvision",
+    "openai>=1.0.0",
 ]
