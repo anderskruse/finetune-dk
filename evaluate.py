@@ -1,5 +1,5 @@
 """
-Evaluate the fine-tuned Mistral-Nemo model on Danish prompts.
+Evaluate a fine-tuned model on Danish prompts.
 """
 
 import argparse
@@ -26,16 +26,24 @@ def load_model(model_path):
     FastLanguageModel.for_inference(model)
     return model, tokenizer
 
-def generate(model, tokenizer, prompt):
+def generate(model, tokenizer, prompt, no_thinking=False):
     """Generate response for a prompt."""
     messages = [
         {"role": "system", "content": config.SYSTEM_PROMPT},
         {"role": "user", "content": prompt}
     ]
 
-    text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-    inputs = tokenizer(text, return_tensors="pt").to(model.device)
+    kwargs = {"enable_thinking": False} if no_thinking else {}
+    inputs = tokenizer.apply_chat_template(
+        messages,
+        tokenize=True,
+        add_generation_prompt=True,
+        return_tensors="pt",
+        return_dict=True,
+        **kwargs,
+    ).to(model.device)
 
+    input_len = inputs["input_ids"].shape[1]
     outputs = model.generate(
         **inputs,
         max_new_tokens=256,
@@ -44,16 +52,15 @@ def generate(model, tokenizer, prompt):
         pad_token_id=tokenizer.eos_token_id,
     )
 
-    response = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    # Extract just the assistant response
-    if "[/INST]" in response:
-        response = response.split("[/INST]")[-1].strip()
-    return response
+    # Decode only the newly generated tokens
+    response = tokenizer.decode(outputs[0][input_len:], skip_special_tokens=True)
+    return response.strip()
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", default="./outputs/merged_model", help="Path to model")
+    parser.add_argument("--model", default="./outputs/lora_adapter", help="Path to model")
     parser.add_argument("--base", action="store_true", help="Test base model instead")
+    parser.add_argument("--no-thinking", action="store_true", help="Disable thinking mode (for Qwen3+)")
     args = parser.parse_args()
 
     model_path = config.MODEL_NAME if args.base else args.model
@@ -63,7 +70,7 @@ def main():
     print("\n" + "="*60)
     for prompt in TEST_PROMPTS:
         print(f"\nQ: {prompt}")
-        response = generate(model, tokenizer, prompt)
+        response = generate(model, tokenizer, prompt, no_thinking=args.no_thinking)
         print(f"A: {response}")
         print("-"*60)
 
