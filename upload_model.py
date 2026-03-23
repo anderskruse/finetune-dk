@@ -26,20 +26,23 @@ Danish instruction-tuned version of {model_name}, fine-tuned on the {dataset_nam
 ## Usage
 
 ```python
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoProcessor
 
 model = AutoModelForCausalLM.from_pretrained("{repo}")
-tokenizer = AutoTokenizer.from_pretrained("{repo}")
+processor = AutoProcessor.from_pretrained("{repo}")
 
 messages = [
-    {{"role": "system", "content": "Du er en hjælpsom assistent."}},
-    {{"role": "user", "content": "Hvad er koldskål?"}}
+    {{"role": "system", "content": [{{"type": "text", "text": "Du er en hjælpsom assistent."}}]}},
+    {{"role": "user", "content": [{{"type": "text", "text": "Hvad er koldskål?"}}]}}
 ]
 
-text = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-inputs = tokenizer(text, return_tensors="pt")
+inputs = processor.apply_chat_template(
+    messages, tokenize=True, add_generation_prompt=True,
+    enable_thinking=False, return_tensors="pt", return_dict=True
+)
 outputs = model.generate(**inputs, max_new_tokens=256)
-print(tokenizer.decode(outputs[0], skip_special_tokens=True))
+input_len = inputs["input_ids"].shape[1]
+print(processor.decode(outputs[0][input_len:], skip_special_tokens=True))
 ```
 
 ## Training
@@ -58,7 +61,7 @@ print(tokenizer.decode(outputs[0], skip_special_tokens=True))
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--repo", required=True, help="HF repo name (username/model-name)")
-    parser.add_argument("--model-name", default="unsloth/Mistral-Nemo-Instruct-2407",
+    parser.add_argument("--model-name", default="unsloth/Qwen3.5-9B",
                         help="Base model name for model card (default: %(default)s)")
     parser.add_argument("--dataset", default="kobprof/skolegpt-instruct",
                         help="Dataset name for model card (default: %(default)s)")
