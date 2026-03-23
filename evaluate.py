@@ -29,8 +29,8 @@ def load_model(model_path):
 def generate(model, tokenizer, prompt, no_thinking=False):
     """Generate response for a prompt."""
     messages = [
-        {"role": "system", "content": config.SYSTEM_PROMPT},
-        {"role": "user", "content": prompt}
+        {"role": "system", "content": [{"type": "text", "text": config.SYSTEM_PROMPT}]},
+        {"role": "user", "content": [{"type": "text", "text": prompt}]},
     ]
 
     kwargs = {"enable_thinking": False} if no_thinking else {}
