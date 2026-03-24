@@ -41,7 +41,10 @@ def setup_llama_cpp():
 
     req_file = os.path.join(LLAMA_CPP_PATH, "requirements.txt")
     if os.path.exists(req_file):
-        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", req_file], check=True)
+        subprocess.run(
+            ["uv", "pip", "install", "-q", "-r", req_file, "--python", sys.executable],
+            check=True
+        )
 
 
 def merge_model(model_path, merged_path):
