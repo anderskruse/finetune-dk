@@ -1,61 +1,130 @@
 """
 Export fine-tuned model to GGUF format for use with llama.cpp, Ollama, etc.
+
+Unsloth's save_pretrained_gguf does not support Qwen3.5 (VL architecture),
+so this script merges via Unsloth then converts with llama.cpp directly.
 """
 
 import os
+import sys
+import subprocess
 import argparse
+import gc
 from unsloth import FastLanguageModel
 import config
 
 
-QUANTIZATION_METHODS = [
-    "q4_k_m",
-    "q5_k_m",
-    "q8_0",
-    "f16",
-]
+QUANTIZATION_METHODS = ["q4_k_m", "q5_k_m", "q8_0", "f16"]
+LLAMA_CPP_PATH = "/workspace/llama.cpp"
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", default="./outputs/lora_adapter",
-                        help="Path to LoRA adapter or merged model (default: %(default)s)")
-    parser.add_argument("--output-dir", default="./outputs/gguf",
-                        help="Output directory for GGUF files (default: %(default)s)")
-    parser.add_argument("--quant", default="q4_k_m", choices=QUANTIZATION_METHODS,
-                        help="Quantization method (default: %(default)s)")
-    args = parser.parse_args()
+def setup_llama_cpp():
+    """Clone and build llama.cpp if not already present."""
+    if not os.path.exists(LLAMA_CPP_PATH):
+        print("Cloning llama.cpp...")
+        subprocess.run(
+            ["git", "clone", "https://github.com/ggerganov/llama.cpp", LLAMA_CPP_PATH],
+            check=True
+        )
 
-    os.makedirs(args.output_dir, exist_ok=True)
+    quantize_bin = os.path.join(LLAMA_CPP_PATH, "build", "bin", "llama-quantize")
+    if not os.path.exists(quantize_bin):
+        print("Building llama.cpp with CUDA...")
+        subprocess.run(
+            ["cmake", "-B", "build", "-DGGML_CUDA=ON"],
+            cwd=LLAMA_CPP_PATH, check=True
+        )
+        subprocess.run(
+            ["cmake", "--build", "build", "--config", "Release", "-j4"],
+            cwd=LLAMA_CPP_PATH, check=True
+        )
 
-    print(f"Loading model from {args.model_path}...")
+    req_file = os.path.join(LLAMA_CPP_PATH, "requirements.txt")
+    if os.path.exists(req_file):
+        subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", req_file], check=True)
+
+
+def merge_model(model_path, merged_path):
+    """Load LoRA adapter, merge into base model, save as safetensors."""
+    import json, types
+    _orig = json.JSONEncoder.default
+    def _patched(self, obj):
+        if callable(obj):
+            return None
+        return _orig(self, obj)
+    json.JSONEncoder.default = _patched
+
+    print(f"Loading model from {model_path}...")
     model, tokenizer = FastLanguageModel.from_pretrained(
-        model_name=args.model_path,
+        model_name=model_path,
         max_seq_length=config.MAX_SEQ_LENGTH,
         load_in_4bit=False,
         load_in_8bit=True,
         dtype=None,
     )
 
-    # Patch: Qwen3.5 VL config contains function objects buried in nested sub-configs
-    # that break JSON serialization during the merge step.
-    # Monkey-patch the JSON encoder to silently drop any non-serializable callables.
-    import json, types
-    _original_default = json.JSONEncoder.default
-    def _patched_default(self, obj):
-        if callable(obj):
-            return None
-        return _original_default(self, obj)
-    json.JSONEncoder.default = _patched_default
+    print(f"Saving merged model to {merged_path}...")
+    model.save_pretrained_merged(merged_path, tokenizer, save_method="merged_16bit")
 
-    print(f"Exporting to GGUF with {args.quant} quantization...")
-    model.save_pretrained_gguf(
-        args.output_dir,
-        tokenizer,
-        quantization_method=args.quant,
+    del model
+    gc.collect()
+
+    try:
+        import torch
+        torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model-path", default="./outputs/lora_adapter",
+                        help="Path to LoRA adapter (default: %(default)s)")
+    parser.add_argument("--merged-path", default="./outputs/merged_model",
+                        help="Intermediate path for merged safetensors (default: %(default)s)")
+    parser.add_argument("--output-dir", default="./outputs/gguf",
+                        help="Output directory for GGUF files (default: %(default)s)")
+    parser.add_argument("--quant", default="q4_k_m", choices=QUANTIZATION_METHODS,
+                        help="Quantization method (default: %(default)s)")
+    parser.add_argument("--skip-merge", action="store_true",
+                        help="Skip merge step if merged model already exists")
+    args = parser.parse_args()
+
+    os.makedirs(args.output_dir, exist_ok=True)
+    os.makedirs(args.merged_path, exist_ok=True)
+
+    # Step 1: Merge LoRA into base model
+    already_merged = any(f.endswith(".safetensors") for f in os.listdir(args.merged_path))
+    if args.skip_merge or already_merged:
+        print(f"Using existing merged model at {args.merged_path}")
+    else:
+        merge_model(args.model_path, args.merged_path)
+
+    # Step 2: Set up llama.cpp
+    setup_llama_cpp()
+
+    # Step 3: Convert merged safetensors → GGUF f16
+    f16_path = os.path.join(args.output_dir, "model-f16.gguf")
+    convert_script = os.path.join(LLAMA_CPP_PATH, "convert_hf_to_gguf.py")
+    print("Converting to GGUF (f16)...")
+    subprocess.run(
+        [sys.executable, convert_script, args.merged_path,
+         "--outfile", f16_path, "--outtype", "f16"],
+        check=True
     )
 
-    print(f"Done! GGUF files saved to {args.output_dir}")
+    if args.quant == "f16":
+        print(f"Done! GGUF saved to {f16_path}")
+        return
+
+    # Step 4: Quantize
+    quant_path = os.path.join(args.output_dir, f"model-{args.quant}.gguf")
+    quantize_bin = os.path.join(LLAMA_CPP_PATH, "build", "bin", "llama-quantize")
+    print(f"Quantizing to {args.quant}...")
+    subprocess.run([quantize_bin, f16_path, quant_path, args.quant.upper()], check=True)
+
+    os.remove(f16_path)
+    print(f"Done! GGUF saved to {quant_path}")
 
 
 if __name__ == "__main__":
