@@ -39,12 +39,8 @@ def setup_llama_cpp():
             cwd=LLAMA_CPP_PATH, check=True
         )
 
-    req_file = os.path.join(LLAMA_CPP_PATH, "requirements.txt")
-    if os.path.exists(req_file):
-        subprocess.run(
-            ["uv", "pip", "install", "-q", "-r", req_file, "--python", sys.executable],
-            check=True
-        )
+    # Skip llama.cpp requirements — they conflict with the training venv.
+    # The convert script only needs numpy + torch which are already installed.
 
 
 def merge_model(model_path, merged_path):
