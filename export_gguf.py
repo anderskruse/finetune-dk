@@ -37,14 +37,16 @@ def main():
         dtype=None,
     )
 
-    # Patch: Qwen3.5 VL config contains function objects that break JSON serialization
-    # during the merge step — replace any callable config values with None
-    import types
-    cfg = model.config
-    for key in list(vars(cfg).keys()):
-        val = getattr(cfg, key, None)
-        if isinstance(val, types.FunctionType):
-            setattr(cfg, key, None)
+    # Patch: Qwen3.5 VL config contains function objects buried in nested sub-configs
+    # that break JSON serialization during the merge step.
+    # Monkey-patch the JSON encoder to silently drop any non-serializable callables.
+    import json, types
+    _original_default = json.JSONEncoder.default
+    def _patched_default(self, obj):
+        if callable(obj):
+            return None
+        return _original_default(self, obj)
+    json.JSONEncoder.default = _patched_default
 
     print(f"Exporting to GGUF with {args.quant} quantization...")
     model.save_pretrained_gguf(
