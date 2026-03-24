@@ -37,6 +37,15 @@ def main():
         dtype=None,
     )
 
+    # Patch: Qwen3.5 VL config contains function objects that break JSON serialization
+    # during the merge step — replace any callable config values with None
+    import types
+    cfg = model.config
+    for key in list(vars(cfg).keys()):
+        val = getattr(cfg, key, None)
+        if isinstance(val, types.FunctionType):
+            setattr(cfg, key, None)
+
     print(f"Exporting to GGUF with {args.quant} quantization...")
     model.save_pretrained_gguf(
         args.output_dir,
