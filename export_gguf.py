@@ -45,13 +45,7 @@ def setup_llama_cpp():
 
 def merge_model(model_path, merged_path):
     """Load LoRA adapter, merge into base model, save as safetensors."""
-    import json, types
-    _orig = json.JSONEncoder.default
-    def _patched(self, obj):
-        if callable(obj):
-            return None
-        return _orig(self, obj)
-    json.JSONEncoder.default = _patched
+    import json
 
     print(f"Loading model from {model_path}...")
     model, tokenizer = FastLanguageModel.from_pretrained(
@@ -62,8 +56,18 @@ def merge_model(model_path, merged_path):
         dtype=None,
     )
 
-    print(f"Saving merged model to {merged_path}...")
-    model.save_pretrained_merged(merged_path, tokenizer, save_method="merged_16bit")
+    # Scope the callable-patching workaround to only the save call, then restore.
+    _orig = json.JSONEncoder.default
+    def _patched(self, obj):
+        if callable(obj):
+            return None
+        return _orig(self, obj)
+    json.JSONEncoder.default = _patched
+    try:
+        print(f"Saving merged model to {merged_path}...")
+        model.save_pretrained_merged(merged_path, tokenizer, save_method="merged_16bit")
+    finally:
+        json.JSONEncoder.default = _orig
 
     del model
     gc.collect()
@@ -73,6 +77,45 @@ def merge_model(model_path, merged_path):
         torch.cuda.empty_cache()
     except Exception:
         pass
+
+    # Verify the chat template survived the merge; restore from the adapter if not.
+    _ensure_chat_template(merged_path, model_path)
+
+
+def _ensure_chat_template(merged_path, fallback_path):
+    """Check that tokenizer_config.json in merged_path has a chat_template.
+    If not, copy it from fallback_path (the LoRA adapter directory)."""
+    import json
+
+    config_path = os.path.join(merged_path, "tokenizer_config.json")
+    if not os.path.exists(config_path):
+        print("Warning: tokenizer_config.json not found in merged model directory.")
+        return
+
+    with open(config_path, encoding="utf-8") as f:
+        tok_config = json.load(f)
+
+    if tok_config.get("chat_template"):
+        return  # all good
+
+    print("Warning: chat_template missing from merged tokenizer config — restoring from adapter...")
+    fallback_config_path = os.path.join(fallback_path, "tokenizer_config.json")
+    if not os.path.exists(fallback_config_path):
+        print("Warning: adapter tokenizer_config.json not found; chat template cannot be restored.")
+        return
+
+    with open(fallback_config_path, encoding="utf-8") as f:
+        fallback_config = json.load(f)
+
+    template = fallback_config.get("chat_template")
+    if not template:
+        print("Warning: adapter tokenizer also lacks chat_template; GGUF may not behave as instruct model.")
+        return
+
+    tok_config["chat_template"] = template
+    with open(config_path, "w", encoding="utf-8") as f:
+        json.dump(tok_config, f, indent=2, ensure_ascii=False)
+    print("chat_template restored successfully.")
 
 
 def main():
